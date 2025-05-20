@@ -1,2 +1,2 @@
 # nnbryo
-Template for machine learning leveraging Zigrad
+Template for machine learning leveraging Zigrad/PyTorch
