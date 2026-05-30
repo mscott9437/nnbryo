@@ -1,0 +1,6 @@
+baseURL = 'https://mscott9437.github.io/nnbryo/'
+title = 'NNBryo Canonical Runtime'
+
+[languages]
+  [languages.en]
+    label = 'English'
