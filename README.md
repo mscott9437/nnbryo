@@ -426,7 +426,7 @@ NNBryo is being engineered toward that future.
 
 # 📜 License
 
-MIT License
+GNU Affero General Public License (AGPL)
 
 ---
 
