@@ -1,85 +1,229 @@
 import hashlib
-import torch
-import torch.nn.functional as F
+import time
 
-# LDAP identity anchor
+import numpy as np
+import torch
+
+# --------------------------------------------------
+# Runtime Metadata
+# --------------------------------------------------
+
+RUNTIME_NAME = "NNBryo"
+RUNTIME_VERSION = "0.14"
+
+# --------------------------------------------------
+# Identity
+# --------------------------------------------------
+
 ldap_identity = (
- "uid=alice,"
- "ou=admins,"
- "dc=example,"
- "dc=com"
+    "uid=alice,"
+    "ou=admins,"
+    "dc=example,"
+    "dc=com"
 )
 
-# Deterministic identity material
 identity_hash = hashlib.sha256(
- ldap_identity.encode()
+    ldap_identity.encode()
 ).digest()
 
-# LDAP-derived affinity signal
-identity_affinity = torch.tensor(
- [identity_hash[0] / 255.0]
+identity_affinity = identity_hash[0] / 255.0
+
+# --------------------------------------------------
+# Semantic Runtime Device
+# --------------------------------------------------
+
+device = torch.device(
+    "cuda"
+    if torch.cuda.is_available()
+    else "cpu"
 )
 
-# Behavioral state continuity
-identity_t0 = torch.tensor(
- [0.9, 0.7, 0.8]
+print(f"{RUNTIME_NAME} {RUNTIME_VERSION}")
+print(f"Semantic Runtime Device: {device}")
+
+# --------------------------------------------------
+# Runtime Tensor Layout
+# --------------------------------------------------
+
+AFFINITY     = 0
+CONTINUITY   = 1
+DECAY        = 2
+DRIFT        = 3
+TRAJECTORY   = 4
+TRUST        = 5
+PRIVILEGE    = 6
+AUTHORIZED   = 7
+TICK         = 8
+UPTIME       = 9
+
+runtime_state = torch.zeros(
+    10,
+    dtype=torch.float32,
+    device=device
 )
 
-identity_t1 = torch.tensor(
- [0.88, 0.72, 0.79]
-)
+# --------------------------------------------------
+# Runtime State
+# --------------------------------------------------
 
-# Behavioral continuity
-continuity_score = F.cosine_similarity(
- identity_t0,
- identity_t1,
- dim=0
-)
+trust = {
+    "identity": ldap_identity,
+    "affinity": identity_affinity,
+    "continuity": 1.0,
+    "decay": 1.0,
+    "drift": 0.05,
+    "trajectory": 0.0,
+    "privilege": 1.5,
+    "trust": 1.0,
+    "authorized": True,
+}
 
-# Simulated temporal trust decay
-time_decay = torch.tensor(
- [0.85]
-)
+TRUST_THRESHOLD = 0.50
 
-# Historical session drift accumulation
-historical_drift = torch.tensor(
- [0.05, 0.08, 0.12]
-)
+DECAY_RATE = 0.02
+UPDATE_RATE = 100.0
 
-drift_penalty = historical_drift.mean()
+tick = 0
+uptime = 0.0
 
-# Privilege weighting
-privilege_weight = torch.tensor(
- [1.5]
-)
+previous_trust = trust["trust"]
+previous_update = time.perf_counter()
 
-# Time-aware probabilistic trust score
-trust_score = (
- continuity_score
- * identity_affinity
- * time_decay
-)
+# --------------------------------------------------
+# Publish Semantic Runtime State
+# --------------------------------------------------
 
-# Apply drift + privilege adjustments
-risk_adjusted_trust = (
- trust_score
- - drift_penalty
-) / privilege_weight
+def publish_runtime_state():
 
-# Minimal governance primitive
-TRUST_THRESHOLD = 0.5
+    runtime_state.copy_(torch.tensor([
+        trust["affinity"],
+        trust["continuity"],
+        trust["decay"],
+        trust["drift"],
+        trust["trajectory"],
+        trust["trust"],
+        trust["privilege"],
+        float(trust["authorized"]),
+        float(tick),
+        uptime
+    ],
+    dtype=torch.float32,
+    device=device))
 
-access_granted = (
- risk_adjusted_trust.item()
- >= TRUST_THRESHOLD
-)
+# Publish initial snapshot
+publish_runtime_state()
 
-print(
- f"Risk Adjusted Trust: "
- f"{risk_adjusted_trust.item():.4f}"
-)
+# --------------------------------------------------
+# Continuous Trust Runtime
+# --------------------------------------------------
 
-if access_granted:
- print("ACCESS GRANTED")
-else:
- print("ACCESS DENIED")
+while True:
+
+    #
+    # Acquire timing
+    #
+
+    now = time.perf_counter()
+    dt = now - previous_update
+    previous_update = now
+
+    tick += 1
+    uptime += dt
+
+    #
+    # Continuous Trust Decay
+    #
+
+    trust["decay"] *= np.exp(
+        -DECAY_RATE * dt
+    )
+
+    #
+    # Trust Evolution
+    #
+
+    trust["trust"] = (
+        trust["continuity"]
+        * trust["affinity"]
+        * trust["decay"]
+    )
+
+    #
+    # Drift
+    #
+
+    trust["trust"] -= trust["drift"]
+
+    #
+    # Privilege
+    #
+
+    trust["trust"] /= trust["privilege"]
+
+    #
+    # Clamp
+    #
+
+    trust["trust"] = np.clip(
+        trust["trust"],
+        0.0,
+        1.0
+    )
+
+    #
+    # Trajectory
+    #
+
+    trust["trajectory"] = (
+        trust["trust"]
+        - previous_trust
+    )
+
+    previous_trust = trust["trust"]
+
+    #
+    # Authorization
+    #
+
+    trust["authorized"] = (
+        trust["trust"]
+        >= TRUST_THRESHOLD
+    )
+
+    #
+    # Publish semantic runtime snapshot
+    #
+
+    publish_runtime_state()
+
+    #
+    # Telemetry
+    #
+
+    print(
+        f"tick={tick:06d} "
+        f"trust={trust['trust']:.4f} "
+        f"trajectory={trust['trajectory']:.6f} "
+        f"decay={trust['decay']:.4f} "
+        f"authorized={trust['authorized']}"
+    )
+
+    #
+    # Future:
+    #
+    # Semantic events from OCaml
+    #
+    # trust["continuity"] += ...
+    # trust["drift"] += ...
+    # trust["trust"] += ...
+    #
+    # Future:
+    #
+    # TCP Authorization
+    #
+    # authorize(runtime_state.clone())
+    #
+
+    time.sleep(
+        1.0 / UPDATE_RATE
+    )
